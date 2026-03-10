@@ -127,7 +127,7 @@ The design was synthesized on Artix 7 xc7a35tcsg324-1
 
  
   
-9. Conclusion
+# Conclusion
 
 The branch_predictor_2bit module is synthesisable 2-bit BTB predictor that delivers substantial misprediction reduction on loop-dominated workloads. Against the Bubble Sort benchmark, the predictor cuts the misprediction rate from 74.3% to 35.7%, saving 81 pipeline cycles over the full sort execution.
 The design's primary limitation is its inability to handle data-dependent branches with near-random outcomes. Future enhancements — particularly a global history register feeding a gshare or tournament predictor — would address this weakness and push the overall accuracy well above 80% on general workloads.

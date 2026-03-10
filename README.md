@@ -43,7 +43,7 @@ Bubble sort is an ideal predictor benchmark because it contains three architectu
 3.2  Source Program
 
 C reference implementation (n = 8 integers, random initial order):
-<img width="835" height="379" alt="image" src="https://github.com/user-attachments/assets/2c1e72d8-63f4-4bca-bb66-52e7721d6f21" />
+<img width="847" height="178" alt="image" src="https://github.com/user-attachments/assets/3b1e3a0d-9700-4a3c-9150-a4afc6909539" />
 
 
 #  Branch Characterisation

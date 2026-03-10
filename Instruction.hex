@@ -1,30 +1,74 @@
 // ============================================================================
-// RISC-V RV32I — Bubble Sort (n=8) - Back-edge Version
+// RISC-V RV32I — Bubble Sort (n=8)
+// Branch Predictor Testbench Program
+//
+// C source:
+//   void bubble_sort(int a[], int n) {           // a0=array, a1=n
+//       for (int i = 0; i < n-1; i++)           // Branch A @ 0x1000
+//           for (int j = 0; j < n-1-i; j++)     // Branch B @ 0x1010
+//               if (a[j] > a[j+1])              // Branch C @ 0x1020
+//                   swap(a[j], a[j+1]);
+//   }
+//
+// Register map:
+//   a0 (x10) = array base address (arg)
+//   a1 (x11) = n                  (arg)
+//   t0 (x5)  = i                  (outer counter)
+//   t1 (x6)  = j                  (inner counter)
+//   t2 (x7)  = n-1                (outer bound)
+//   t3 (x28) = n-1-i              (inner bound, recalculated each outer iter)
+//   t4 (x29) = &a[j]              (running pointer, +4 per inner iteration)
+//   t5 (x30) = a[j]               (loaded for comparison / swap)
+//   t6 (x31) = a[j+1]             (loaded for comparison / swap)
+//   ra (x1)  = return address
+//
+// Branch summary — exact PCs match predictor report simulation:
+//   Branch A  0x1000  bge t0, t2  ->  0x1040  outer loop exit  taken 6/7  (85.7%)
+//   Branch B  0x1010  bge t1, t3  ->  0x1038  inner loop exit  taken 28/35 (80.0%)
+//   Branch C  0x1020  bge t6, t5  ->  0x102C  skip swap        taken ~55%  (data-dep.)
+//
+// NOTE: bge t6, t5 encodes "branch if a[j+1] >= a[j]" i.e. skip swap
+//       when already in order — equivalent to "if (a[j] > a[j+1]) swap".
+//
 // ============================================================================
 
+// ── Prologue (before outer_loop) ─────────────────────────────────────────────
+@00000FF8
+00000293  // 0x0FF8  addi  t0, x0, 0        i = 0
+FFF58393  // 0x0FFC  addi  t2, a1, -1       t2 = n-1
+
+// ── outer_loop ────────────────────────────────────────────────────────────────
 @00001000
-// ── Branch A: Outer Loop Header ──────────────────────────────────────────
-00000293  // 0x1000  addi  t0, x0, 0       i = 0
-FFF58393  // 0x1004  addi  t2, a1, -1      t2 = n-1
+0472D063  // 0x1000  bge   t0, t2, 0x1040   BRANCH A — exit if i >= n-1
+40538E33  // 0x1004  sub   t3, t2, t0       t3 = n-1-i  (inner bound)
+00000313  // 0x1008  addi  t1, x0, 0        j = 0
+00050EB3  // 0x100C  add   t4, a0, x0       t4 = &a[0]  (reset pointer each outer iter)
 
-// ── inner_loop_init ──────────────────────────────────────────────────────
-40538E33  // 0x1008  sub   t3, t2, t0      t3 = n-1-i
-00000313  // 0x100C  addi  t1, x0, 0       j = 0
+// ── inner_loop ────────────────────────────────────────────────────────────────
+03C35463  // 0x1010  bge   t1, t3, 0x1038   BRANCH B — exit if j >= n-1-i
+000EAF03  // 0x1014  lw    t5, 0(t4)        t5 = a[j]
+004EAF83  // 0x1018  lw    t6, 4(t4)        t6 = a[j+1]
+00000013  // 0x101C  nop                    alignment padding
 
-// ── Branch B: Inner Loop Body ────────────────────────────────────────────
-00231E93  // 0x1010  slli  t4, t1, 2       t4 = j * 4
-01D50EB3  // 0x1014  add   t4, a0, t4      t4 = &a[j]
-000EAF03  // 0x1018  lw    t5, 0(t4)       t5 = a[j]
-004EAF83  // 0x101C  lw    t6, 4(t4)       t6 = a[j+1]
+// ── comparison ────────────────────────────────────────────────────────────────
+01EFD663  // 0x1020  bge   t6, t5, 0x102C   BRANCH C — skip swap if a[j] <= a[j+1]
 
-// ── Branch C: Swap Condition (PC 0x1020) ─────────────────────────────────
-005F5663  // 0x1020  bge   t5, t6, 0x102C  Branch C: Skip swap if a[j] <= a[j+1]
-01FEA023  // 0x1024  sw    t6, 0(t4)       swap...
-01EEA223  // 0x1028  sw    t5, 4(t4)
+// ── swap ──────────────────────────────────────────────────────────────────────
+01FEA023  // 0x1024  sw    t6, 0(t4)        a[j]   = old a[j+1]
+01EEA223  // 0x1028  sw    t5, 4(t4)        a[j+1] = old a[j]
 
-// ── Increment and Inner Loop Back-edge ───────────────────────────────────
-00130313  // 0x102C  addi  t1, t1, 1       j++
-FCD346E3  // 0x1030  blt   t1, t3, 0x1010  Branch B: Jump back if j < t3 (TAKEN)
+// ── no_swap / loop tail ───────────────────────────────────────────────────────
+00130313  // 0x102C  addi  t1, t1, 1        j++
+004E8E93  // 0x1030  addi  t4, t4, 4        ptr++ (advance to &a[j+1])
+FDDFF06F  // 0x1034  jal   x0, 0x1010       goto inner_loop  (offset = -36)
+
+// ── inner_done ────────────────────────────────────────────────────────────────
+00128293  // 0x1038  addi  t0, t0, 1        i++
+FC5FF06F  // 0x103C  jal   x0, 0x1000       goto outer_loop  (offset = -60)
+
+// ── outer_done / return ───────────────────────────────────────────────────────
+00008067  // 0x1040  jalr  x0, ra, 0        return
+
 
 // ── Increment and Outer Loop Back-edge ───────────────────────────────────
 00128293  // 0x1034  addi  t0, t0, 1       i++

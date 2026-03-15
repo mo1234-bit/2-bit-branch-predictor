@@ -64,9 +64,6 @@ module branch_predictor_2bit(
           
     integer i;
     
-    // ================================================================
-    // PREDICTION
-    // ================================================================
    always @(*) begin
     if (fetch_valid && !stall &&
         btb_valid[fetch_idx] &&
@@ -79,10 +76,7 @@ module branch_predictor_2bit(
     end
 end
 
-    
-    // ================================================================
-    // UPDATE
-    // ================================================================
+    
     always @(posedge clk) begin
         if (!rst_n) begin
             for (i = 0; i < BTB_SIZE; i = i + 1) begin
